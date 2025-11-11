@@ -457,10 +457,11 @@
 
   function calculateLagrange() {
     const exprF = fnInput.value.trim();
-    const exprG = (gInput && gInput.value ? gInput.value.trim() : '').trim();
+    let exprG = (gInput && gInput.value ? gInput.value.trim() : '').trim();
     if (!exprG) {
-      lagOut && (lagOut.textContent = 'Define la restricción g(x,y)=0.');
-      return;
+      // Usar una restricción por defecto segura (circunferencia unidad) y continuar
+      exprG = 'x^2 + y^2 - 1';
+      if (gInput) gInput.value = exprG;
     }
     const x0 = Number(x0Input.value), y0 = Number(y0Input.value);
     const lam0 = lambda0Input ? Number(lambda0Input.value) : 0;
@@ -482,6 +483,25 @@
     const gridG = sampleGrid(g, xmin, xmax, ymin, ymax, n);
     const overlays = { constraintZ: gridG.zs, optPoints: [{ x: sol.x, y: sol.y, z: f(sol.x, sol.y) }] };
     plotCharts(gridF.xs, gridF.ys, gridF.zs, overlays);
+    // Asegurar que la interfaz gráfica sea visible
+    if (chart2d && chart2d.scrollIntoView) {
+      try { chart2d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
+    }
+    // Si convergió, actualizar (x0,y0) y mostrar evaluación y gradiente en P*
+    if (sol.success) {
+      x0Input.value = sol.x;
+      y0Input.value = sol.y;
+      const { dfx, dfy } = partialDerivatives(exprF);
+      const gx = dfx(sol.x, sol.y);
+      const gy = dfy(sol.x, sol.y);
+      const val = f(sol.x, sol.y);
+      if (Number.isFinite(val)) {
+        valOut.textContent = `f(${sol.x}, ${sol.y}) = ${val}`;
+      }
+      if (Number.isFinite(gx) && Number.isFinite(gy)) {
+        gradOut.textContent = `∂f/∂x = ${gx}, ∂f/∂y = ${gy}`;
+      }
+    }
   }
 
   // Eventos
