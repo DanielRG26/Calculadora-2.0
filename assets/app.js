@@ -20,6 +20,11 @@
   const iyMax = $('iy-max');
   const nInt = $('n-int');
   const epsInput = $('eps');
+  // Integral simple (1D)
+  const siA = $('si-a');
+  const siB = $('si-b');
+  const siFn = $('si-fn');
+  const siN = $('si-n');
 
   const chart3d = $('chart3d');
   const chart2d = $('chart2d');
@@ -28,13 +33,17 @@
   const gradOut = $('grad-out');
   const domOut = $('dom-out');
   const limOut = $('lim-out');
+  const critOut = $('crit-out');
   const intOut = $('int-out');
+  const singleIntOut = $('single-int-out');
   const lagOut = $('lag-out');
 
   const btnVisualizar = $('btn-visualizar');
   const btnCalcular = $('btn-calcular');
   const btnIntegral = $('btn-integral');
   const btnLimite = $('btn-limite');
+  const btnCritico = $('btn-critico');
+  const btnSingleInt = $('btn-single-int');
   const btnLagrange = $('btn-lagrange');
   const gInput = $('g-input');
   const lambda0Input = $('lambda0');
@@ -67,6 +76,12 @@
       { label: 'x*y (∇f=(y,x))', expr: 'x*y', dom: { xmin: -4, xmax: 4, ymin: -4, ymax: 4 }, point: { x0: 2, y0: -1 }, focus: 'grad' },
       { label: 'sin(x)+cos(y)', expr: 'sin(x) + cos(y)', dom: { xmin: -6, xmax: 6, ymin: -6, ymax: 6 }, point: { x0: 0, y0: 0 }, focus: 'grad' },
       { label: 'exp(x*y)', expr: 'exp(x*y)', dom: { xmin: -3, xmax: 3, ymin: -3, ymax: 3 }, point: { x0: 0.5, y0: -0.5 }, focus: 'grad' }
+    ],
+    integrales: [
+      { label: '∫ sin(t) dt en [0, π]', single: { h: 'sin(t)', a: 0, b: 'pi', n: 100 } },
+      { label: '∫ cos(t) dt en [0, 2π]', single: { h: 'cos(t)', a: 0, b: '2*pi', n: 120 } },
+      { label: '∫ e^{-t^2} dt en [-1,1]', single: { h: 'exp(-t^2)', a: -1, b: 1, n: 120 } },
+      { label: '∫ 1/(1+t^2) dt en [-2,2]', single: { h: '1/(1 + t^2)', a: -2, b: 2, n: 120 } }
     ]
   };
 
@@ -81,6 +96,18 @@
     visualize();
     if (ex.focus === 'grad') { calculateAll(); }
     if (ex.focus === 'limit') { calculateLimit(); }
+    // Si es un ejemplo de integral simple, poblar y calcular
+    if (ex.single && siFn && siA && siB && siN) {
+      siFn.value = ex.single.h;
+      try {
+        siA.value = typeof ex.single.a === 'string' ? math.evaluate(ex.single.a) : ex.single.a;
+        siB.value = typeof ex.single.b === 'string' ? math.evaluate(ex.single.b) : ex.single.b;
+      } catch {
+        siA.value = ex.single.a; siB.value = ex.single.b;
+      }
+      if (ex.single.n) siN.value = ex.single.n;
+      calculateSingleIntegral();
+    }
   }
 
   function renderExamples(cat) {
@@ -93,6 +120,41 @@
       btn.addEventListener('click', () => applyExample(ex));
       examplesList.appendChild(btn);
     });
+  }
+
+  // Compila una función h(t) para integral 1D
+  function compileFunction1D(expr) {
+    try {
+      const node = math.parse(expr);
+      const code = node.compile();
+      return (t) => {
+        try {
+          const scope = { t, e: Math.E, pi: Math.PI };
+          const v = code.evaluate(scope);
+          return typeof v === 'number' ? v : Number(v);
+        } catch (e) {
+          return NaN;
+        }
+      };
+    } catch (e) {
+      return () => NaN;
+    }
+  }
+
+  // Integral simple por Simpson compuesto en [a,b]
+  function singleIntegralSimpson(h, a, b, n) {
+    n = Math.max(10, Math.floor(n));
+    if (n % 2 === 1) n += 1;
+    const hstep = (b - a) / n;
+    let sum = 0;
+    for (let i = 0; i <= n; i++) {
+      const x = a + i * hstep;
+      const w = i === 0 || i === n ? 1 : (i % 2 === 1 ? 4 : 2);
+      const v = h(x);
+      if (!Number.isFinite(v)) return NaN;
+      sum += w * v;
+    }
+    return (hstep / 3) * sum;
   }
 
   if (examplesTabs) {
@@ -233,7 +295,33 @@
         marker: { size: 5, color: '#ff3864' }, name: 'Puntos óptimos'
       });
     }
-    Plotly.newPlot(chart3d, surfaceData.concat(opt3d), surfaceLayout, { responsive: true, displayModeBar: true });
+    // Punto(s) crítico(s) en 3D
+    if (grad && grad.critPoints && Array.isArray(grad.critPoints)) {
+      const pts = grad.critPoints.map(p => ({ x: p.x, y: p.y, z: p.z }));
+      opt3d.push({
+        type: 'scatter3d', mode: 'markers',
+        x: pts.map(p => p.x), y: pts.map(p => p.y), z: pts.map(p => p.z),
+        marker: { size: 5, color: '#3c91e6' }, name: 'Puntos críticos'
+      });
+    }
+    // Trazar región de integración en 3D si existe
+    const int3d = [];
+    if (grad && grad.int3dTrace) {
+      int3d.push({
+        type: 'scatter3d', mode: 'lines',
+        x: grad.int3dTrace.x, y: grad.int3dTrace.y, z: grad.int3dTrace.z,
+        line: { color: '#00d1b2', width: 4 }, name: 'Región de integración (borde)'
+      });
+    }
+    // Superficie semitransparente sobre la región de integración (aprox. “volumen”)
+    if (grad && grad.int3dRegionZ) {
+      int3d.push({
+        type: 'surface', x: xs, y: ys, z: grad.int3dRegionZ,
+        colorscale: 'Greens', showscale: false, opacity: 0.35,
+        name: 'Región bajo z=f(x,y)'
+      });
+    }
+    Plotly.newPlot(chart3d, surfaceData.concat(opt3d).concat(int3d), surfaceLayout, { responsive: true, displayModeBar: true });
 
     // Contorno 2D (heatmap de z)
     const h2d = chart2d.clientHeight || 420;
@@ -251,6 +339,15 @@
         hoverinfo: 'none'
       });
     }
+    // Polígono de la región de integración en 2D (relleno)
+    if (grad && grad.int2dPoly) {
+      contourData.push({
+        type: 'scatter', mode: 'lines',
+        x: grad.int2dPoly.x, y: grad.int2dPoly.y,
+        fill: 'toself', fillcolor: 'rgba(0, 209, 178, 0.15)',
+        line: { color: '#00d1b2', width: 3 }, name: 'Región de integración'
+      });
+    }
     // Curva de restricción g(x,y)=0 como contorno adicional
     if (grad && grad.constraintZ) {
       contourData.push({
@@ -258,6 +355,15 @@
         contours: { start: 0, end: 0, size: 0.01, coloring: 'lines' },
         line: { color: '#ffcc00', width: 3 }, showscale: false,
         name: 'g(x,y)=0'
+      });
+    }
+    // Punto(s) crítico(s) en 2D
+    if (grad && grad.critPoints && Array.isArray(grad.critPoints)) {
+      contourData.push({
+        type: 'scatter', mode: 'markers+text',
+        x: grad.critPoints.map(p => p.x), y: grad.critPoints.map(p => p.y),
+        marker: { color: '#3c91e6', size: 10 }, text: grad.critPoints.map((_p,i)=>`C${i+1}`), textposition: 'top center',
+        name: 'Críticos (∇f=0)'
       });
     }
     // Punto(s) óptimo(s) en 2D
@@ -278,6 +384,35 @@
       yaxis: { title: 'y', gridcolor: '#273152', zerolinecolor: '#273152', tickfont: { color: '#e8eaf6' }, titlefont: { color: '#b7c0d6' } }
     };
     Plotly.newPlot(chart2d, contourData, contourLayout, { responsive: true, displayModeBar: true });
+  }
+
+  // Newton para punto crítico (∇f=0)
+  function criticalNewton(exprF, x0, y0) {
+    const f = compileFunction(exprF);
+    const { dfx: Fx, dfy: Fy } = partialDerivatives(exprF);
+    const F2 = secondDerivatives(exprF);
+    let x = x0, y = y0;
+    const maxIter = 40;
+    const tol = 1e-8;
+    for (let k = 0; k < maxIter; k++) {
+      const gx = Fx(x, y), gy = Fy(x, y);
+      const fxx = F2.fxx(x, y), fxy = F2.fxy(x, y), fyy = F2.fyy(x, y);
+      if (![gx, gy, fxx, fxy, fyy].every(Number.isFinite)) break;
+      const grad = [gx, gy];
+      const J = [ [fxx, fxy], [fxy, fyy] ];
+      const nG = Math.max(Math.abs(gx), Math.abs(gy));
+      if (nG < tol) break;
+      try {
+        const delta = math.lusolve(J, grad.map(v => -v));
+        const dx = delta[0][0], dy = delta[1][0];
+        x += dx; y += dy;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < tol) break;
+      } catch (e) {
+        break;
+      }
+    }
+    const success = [Fx(x,y), Fy(x,y)].map(Math.abs).every(v => v < 1e-5);
+    return { x, y, fval: f(x, y), success };
   }
 
   // Método de Newton para resolver ∇f = λ ∇g y g = 0
@@ -435,8 +570,56 @@
     const val = doubleIntegralSimpson(f, ax, bx, ay, by, n);
     if (Number.isFinite(val)) {
       intOut.textContent = `∫∫ f(x,y) dxdy ≈ ${val} \nRectángulo: x∈[${ax},${bx}], y∈[${ay},${by}], n=${n}`;
+      // Construir overlays para graficar la región de integración
+      const xmin = Number(xMinInput.value), xmax = Number(xMaxInput.value);
+      const ymin = Number(yMinInput.value), ymax = Number(yMaxInput.value);
+      const res = clamp(Number(resInput.value), 10, 200);
+      const grid = sampleGrid(f, xmin, xmax, ymin, ymax, res);
+      // Polígono 2D (cerrado)
+      const xPoly = [ax, bx, bx, ax, ax];
+      const yPoly = [ay, ay, by, by, ay];
+      // Trazo 3D del borde sobre la superficie z=f(x,y)
+      const samples = 40;
+      const x3 = [], y3 = [], z3 = [];
+      for (let i = 0; i <= samples; i++) { // borde inferior y=ay
+        const t = i / samples; const x = ax + t * (bx - ax); const y = ay; x3.push(x); y3.push(y); z3.push(f(x, y));
+      }
+      for (let i = 0; i <= samples; i++) { // borde derecho x=bx
+        const t = i / samples; const x = bx; const y = ay + t * (by - ay); x3.push(x); y3.push(y); z3.push(f(x, y));
+      }
+      for (let i = 0; i <= samples; i++) { // borde superior y=by
+        const t = i / samples; const x = bx - t * (bx - ax); const y = by; x3.push(x); y3.push(y); z3.push(f(x, y));
+      }
+      for (let i = 0; i <= samples; i++) { // borde izquierdo x=ax
+        const t = i / samples; const x = ax; const y = by - t * (by - ay); x3.push(x); y3.push(y); z3.push(f(x, y));
+      }
+      // Z dentro de la región para superponer superficie semitransparente
+      const xMask = grid.xs.map(x => x >= ax && x <= bx);
+      const yMask = grid.ys.map(y => y >= ay && y <= by);
+      const zRegion = grid.zs.map((row, j) => row.map((zv, i) => (xMask[i] && yMask[j] ? zv : null)));
+
+      plotCharts(grid.xs, grid.ys, grid.zs, {
+        int2dPoly: { x: xPoly, y: yPoly },
+        int3dTrace: { x: x3, y: y3, z: z3 },
+        int3dRegionZ: zRegion
+      });
+      if (chart2d && chart2d.scrollIntoView) { try { chart2d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {} }
     } else {
       intOut.textContent = 'Integral no evaluable: la función no es finita en la región.';
+    }
+  }
+
+  function calculateSingleIntegral() {
+    const expr = siFn && siFn.value ? siFn.value.trim() : '';
+    if (!expr) { if (singleIntOut) singleIntOut.textContent = 'Define h(t).'; return; }
+    const h = compileFunction1D(expr);
+    const a = Number(siA.value), b = Number(siB.value);
+    const n = Number(siN.value);
+    const val = singleIntegralSimpson(h, a, b, n);
+    if (Number.isFinite(val)) {
+      singleIntOut.textContent = `∫ h(t) dt ≈ ${val} \nIntervalo: t∈[${a},${b}], n=${n}`;
+    } else {
+      singleIntOut.textContent = 'Integral 1D no evaluable: h(t) no es finita en el intervalo.';
     }
   }
 
@@ -453,6 +636,29 @@
       return `ε=${t.eps}: promedio≈${avg}, dispersión≈${spread}`;
     });
     limOut.textContent = `Estimación por caminos:\n${lines.join('\n')}`;
+  }
+
+  function calculateCritical() {
+    const expr = fnInput.value.trim();
+    const x0 = Number(x0Input.value), y0 = Number(y0Input.value);
+    const sol = criticalNewton(expr, x0, y0);
+    if (critOut) {
+      if (sol.success && Number.isFinite(sol.fval)) {
+        critOut.textContent = `C* ≈ (${sol.x.toFixed(6)}, ${sol.y.toFixed(6)})\nf(C*) ≈ ${sol.fval.toFixed(6)}`;
+      } else {
+        critOut.textContent = `No convergió. Último intento: (${sol.x.toFixed(6)}, ${sol.y.toFixed(6)})`;
+      }
+    }
+    // Visualización con punto crítico marcado
+    const f = compileFunction(expr);
+    const xmin = Number(xMinInput.value), xmax = Number(xMaxInput.value);
+    const ymin = Number(yMinInput.value), ymax = Number(yMaxInput.value);
+    const n = clamp(Number(resInput.value), 10, 200);
+    const grid = sampleGrid(f, xmin, xmax, ymin, ymax, n);
+    const overlays = { critPoints: [{ x: sol.x, y: sol.y, z: f(sol.x, sol.y) }] };
+    plotCharts(grid.xs, grid.ys, grid.zs, overlays);
+    if (sol.success) { x0Input.value = sol.x; y0Input.value = sol.y; }
+    if (chart2d && chart2d.scrollIntoView) { try { chart2d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {} }
   }
 
   function calculateLagrange() {
@@ -509,6 +715,8 @@
   btnCalcular.addEventListener('click', calculateAll);
   btnIntegral.addEventListener('click', calculateIntegral);
   btnLimite.addEventListener('click', calculateLimit);
+  if (btnCritico) btnCritico.addEventListener('click', calculateCritical);
+  if (btnSingleInt) btnSingleInt.addEventListener('click', calculateSingleIntegral);
   if (btnLagrange) btnLagrange.addEventListener('click', calculateLagrange);
 
   // Render inicial
