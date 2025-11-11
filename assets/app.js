@@ -34,9 +34,76 @@
   const btnCalcular = $('btn-calcular');
   const btnIntegral = $('btn-integral');
   const btnLimite = $('btn-limite');
+  const examplesTabs = document.getElementById('examples-tabs');
+  const examplesList = document.getElementById('examples-list');
 
   // Utilidades
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // Catálogo de ejemplos
+  const EXAMPLES = {
+    funciones: [
+      { label: 'sin(x)*cos(y)', expr: 'sin(x)*cos(y)', dom: { xmin: -5, xmax: 5, ymin: -5, ymax: 5 } },
+      { label: 'exp(-(x^2+y^2))', expr: 'exp(-(x^2 + y^2))', dom: { xmin: -4, xmax: 4, ymin: -4, ymax: 4 } },
+      { label: 'x^2 + y^2', expr: 'x^2 + y^2', dom: { xmin: -4, xmax: 4, ymin: -4, ymax: 4 }, focus: 'grad' },
+      { label: 'x^2 - y^2', expr: 'x^2 - y^2', dom: { xmin: -4, xmax: 4, ymin: -4, ymax: 4 } }
+    ],
+    dominio: [
+      { label: 'log(x^2 + y^2)', expr: 'log(x^2 + y^2)', dom: { xmin: -4, xmax: 4, ymin: -4, ymax: 4 } },
+      { label: '1 / (x^2 + y^2 - 1)', expr: '1 / (x^2 + y^2 - 1)', dom: { xmin: -3, xmax: 3, ymin: -3, ymax: 3 } },
+      { label: 'sqrt(x^2 + y^2)', expr: 'sqrt(x^2 + y^2)', dom: { xmin: -4, xmax: 4, ymin: -4, ymax: 4 } }
+    ],
+    limites: [
+      { label: '(x^2*y)/(x^2+y^2) en (0,0)', expr: '(x^2*y)/(x^2 + y^2)', dom: { xmin: -2, xmax: 2, ymin: -2, ymax: 2 }, point: { x0: 0, y0: 0 }, focus: 'limit' },
+      { label: '(x*y)/(x^2+y^2) en (0,0)', expr: '(x*y)/(x^2 + y^2)', dom: { xmin: -2, xmax: 2, ymin: -2, ymax: 2 }, point: { x0: 0, y0: 0 }, focus: 'limit' },
+      { label: '(x^2 - y^2)/(x^2 + y^2) en (0,0)', expr: '(x^2 - y^2)/(x^2 + y^2)', dom: { xmin: -2, xmax: 2, ymin: -2, ymax: 2 }, point: { x0: 0, y0: 0 }, focus: 'limit' }
+    ],
+    derivadas: [
+      { label: 'x^2 + y^2 (∇f=(2x,2y))', expr: 'x^2 + y^2', dom: { xmin: -4, xmax: 4, ymin: -4, ymax: 4 }, point: { x0: 1, y0: 1 }, focus: 'grad' },
+      { label: 'x*y (∇f=(y,x))', expr: 'x*y', dom: { xmin: -4, xmax: 4, ymin: -4, ymax: 4 }, point: { x0: 2, y0: -1 }, focus: 'grad' },
+      { label: 'sin(x)+cos(y)', expr: 'sin(x) + cos(y)', dom: { xmin: -6, xmax: 6, ymin: -6, ymax: 6 }, point: { x0: 0, y0: 0 }, focus: 'grad' },
+      { label: 'exp(x*y)', expr: 'exp(x*y)', dom: { xmin: -3, xmax: 3, ymin: -3, ymax: 3 }, point: { x0: 0.5, y0: -0.5 }, focus: 'grad' }
+    ]
+  };
+
+  function applyExample(ex) {
+    if (!ex) return;
+    fnInput.value = ex.expr;
+    if (ex.dom) {
+      xMinInput.value = ex.dom.xmin; xMaxInput.value = ex.dom.xmax;
+      yMinInput.value = ex.dom.ymin; yMaxInput.value = ex.dom.ymax;
+    }
+    if (ex.point) { x0Input.value = ex.point.x0; y0Input.value = ex.point.y0; }
+    visualize();
+    if (ex.focus === 'grad') { calculateAll(); }
+    if (ex.focus === 'limit') { calculateLimit(); }
+  }
+
+  function renderExamples(cat) {
+    const list = EXAMPLES[cat] || [];
+    examplesList.innerHTML = '';
+    list.forEach((ex) => {
+      const btn = document.createElement('button');
+      btn.className = 'example-chip';
+      btn.textContent = ex.label;
+      btn.addEventListener('click', () => applyExample(ex));
+      examplesList.appendChild(btn);
+    });
+  }
+
+  if (examplesTabs) {
+    examplesTabs.addEventListener('click', (ev) => {
+      const t = ev.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (!t.classList.contains('tab')) return;
+      const cat = t.getAttribute('data-cat');
+      [...examplesTabs.querySelectorAll('.tab')].forEach(el => el.classList.remove('active'));
+      t.classList.add('active');
+      renderExamples(cat);
+    });
+    // render inicial
+    renderExamples('funciones');
+  }
 
   // Compila una función f(x,y) a partir de una cadena
   function compileFunction(expr) {
