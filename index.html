@@ -66,6 +66,13 @@
           <label>Épsilon inicial: <input id="eps" type="number" step="0.0001" value="0.01" /></label>
           <button id="btn-limite">Estimar límite</button>
         </div>
+
+        <h3>Optimización con Lagrange (g(x,y)=0)</h3>
+        <div class="bounds">
+          <label>g(x,y) = <input id="g-input" type="text" placeholder="x^2 + y^2 - 1" /></label>
+          <label>λ0: <input id="lambda0" type="number" step="0.1" value="0" /></label>
+          <button id="btn-lagrange">Calcular Lagrange</button>
+        </div>
       </section>
 
       <section class="panel charts">
@@ -94,6 +101,10 @@
         <div class="result-block">
           <h3>Integral doble (rectangular)</h3>
           <pre id="int-out">—</pre>
+        </div>
+        <div class="result-block">
+          <h3>Óptimo con Lagrange</h3>
+          <pre id="lag-out">—</pre>
         </div>
       </section>
     </main>

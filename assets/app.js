@@ -29,11 +29,15 @@
   const domOut = $('dom-out');
   const limOut = $('lim-out');
   const intOut = $('int-out');
+  const lagOut = $('lag-out');
 
   const btnVisualizar = $('btn-visualizar');
   const btnCalcular = $('btn-calcular');
   const btnIntegral = $('btn-integral');
   const btnLimite = $('btn-limite');
+  const btnLagrange = $('btn-lagrange');
+  const gInput = $('g-input');
+  const lambda0Input = $('lambda0');
   const examplesTabs = document.getElementById('examples-tabs');
   const examplesList = document.getElementById('examples-list');
 
@@ -142,6 +146,25 @@
     }
   }
 
+  // Segundas derivadas necesarias para el método de Newton de Lagrange
+  function secondDerivatives(expr) {
+    try {
+      const fxxNode = math.derivative(math.derivative(expr, 'x'), 'x');
+      const fxyNode = math.derivative(math.derivative(expr, 'x'), 'y');
+      const fyyNode = math.derivative(math.derivative(expr, 'y'), 'y');
+      const fxx = fxxNode.compile();
+      const fxy = fxyNode.compile();
+      const fyy = fyyNode.compile();
+      return {
+        fxx: (x, y) => { try { return fxx.evaluate({ x, y, e: Math.E, pi: Math.PI }); } catch { return NaN; } },
+        fxy: (x, y) => { try { return fxy.evaluate({ x, y, e: Math.E, pi: Math.PI }); } catch { return NaN; } },
+        fyy: (x, y) => { try { return fyy.evaluate({ x, y, e: Math.E, pi: Math.PI }); } catch { return NaN; } }
+      };
+    } catch (e) {
+      return { fxx: () => NaN, fxy: () => NaN, fyy: () => NaN };
+    }
+  }
+
   // Muestreo de grilla para visualización y estimación de rango
   function sampleGrid(f, xmin, xmax, ymin, ymax, n) {
     const xs = [], ys = [], zs = [];
@@ -200,7 +223,17 @@
       },
       autosize: true
     };
-    Plotly.newPlot(chart3d, surfaceData, surfaceLayout, { responsive: true, displayModeBar: true });
+    // Si hay puntos óptimos, superponerlos en 3D
+    const opt3d = [];
+    if (grad && grad.optPoints && Array.isArray(grad.optPoints)) {
+      const pts = grad.optPoints.map(p => ({ x: p.x, y: p.y, z: p.z }));
+      opt3d.push({
+        type: 'scatter3d', mode: 'markers',
+        x: pts.map(p => p.x), y: pts.map(p => p.y), z: pts.map(p => p.z),
+        marker: { size: 5, color: '#ff3864' }, name: 'Puntos óptimos'
+      });
+    }
+    Plotly.newPlot(chart3d, surfaceData.concat(opt3d), surfaceLayout, { responsive: true, displayModeBar: true });
 
     // Contorno 2D (heatmap de z)
     const h2d = chart2d.clientHeight || 420;
@@ -218,6 +251,24 @@
         hoverinfo: 'none'
       });
     }
+    // Curva de restricción g(x,y)=0 como contorno adicional
+    if (grad && grad.constraintZ) {
+      contourData.push({
+        type: 'contour', x: xs, y: ys, z: grad.constraintZ,
+        contours: { start: 0, end: 0, size: 0.01, coloring: 'lines' },
+        line: { color: '#ffcc00', width: 3 }, showscale: false,
+        name: 'g(x,y)=0'
+      });
+    }
+    // Punto(s) óptimo(s) en 2D
+    if (grad && grad.optPoints && Array.isArray(grad.optPoints)) {
+      contourData.push({
+        type: 'scatter', mode: 'markers+text',
+        x: grad.optPoints.map(p => p.x), y: grad.optPoints.map(p => p.y),
+        marker: { color: '#ff3864', size: 10 }, text: grad.optPoints.map((_p,i)=>`P${i+1}`), textposition: 'top center',
+        name: 'Óptimos (Lagrange)'
+      });
+    }
     const contourLayout = {
       title: { text: 'Contorno (nivel de f)', font: { size: 18, color: '#e8eaf6' } },
       height: h2d,
@@ -227,6 +278,46 @@
       yaxis: { title: 'y', gridcolor: '#273152', zerolinecolor: '#273152', tickfont: { color: '#e8eaf6' }, titlefont: { color: '#b7c0d6' } }
     };
     Plotly.newPlot(chart2d, contourData, contourLayout, { responsive: true, displayModeBar: true });
+  }
+
+  // Método de Newton para resolver ∇f = λ ∇g y g = 0
+  function lagrangeNewton(exprF, exprG, x0, y0, lam0) {
+    const f = compileFunction(exprF);
+    const g = compileFunction(exprG);
+    const { dfx: Fx, dfy: Fy } = partialDerivatives(exprF);
+    const { dfx: Gx, dfy: Gy } = partialDerivatives(exprG);
+    const F2 = secondDerivatives(exprF);
+    const G2 = secondDerivatives(exprG);
+
+    let x = x0, y = y0, lam = lam0;
+    const maxIter = 30;
+    const tol = 1e-8;
+    for (let k = 0; k < maxIter; k++) {
+      const fx = Fx(x, y), fy = Fy(x, y);
+      const gx = Gx(x, y), gy = Gy(x, y);
+      const fxx = F2.fxx(x, y), fxy = F2.fxy(x, y), fyy = F2.fyy(x, y);
+      const gxx = G2.fxx(x, y), gxy = G2.fxy(x, y), gyy = G2.fyy(x, y);
+      if (![fx, fy, gx, gy, fxx, fxy, fyy, gxx, gxy, gyy].every(Number.isFinite)) break;
+      // Sistema F = [fx - lam*gx, fy - lam*gy, g(x,y)]
+      const Fvec = [fx - lam * gx, fy - lam * gy, g(x, y)];
+      const nF = Math.max(Math.abs(Fvec[0]), Math.abs(Fvec[1]), Math.abs(Fvec[2]));
+      if (nF < tol) break;
+      // Jacobiano
+      const J = [
+        [fxx - lam * gxx, fxy - lam * gxy, -gx],
+        [fxy - lam * gxy, fyy - lam * gyy, -gy],
+        [gx, gy, 0]
+      ];
+      try {
+        const delta = math.lusolve(J, Fvec.map(v => -v)); // J * delta = -F
+        const dx = delta[0][0], dy = delta[1][0], dlam = delta[2][0];
+        x += dx; y += dy; lam += dlam;
+        if (Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dlam)) < tol) break;
+      } catch (e) {
+        break;
+      }
+    }
+    return { x, y, lam, fval: f(x, y), success: [Fx(x,y) - lam*Gx(x,y), Fy(x,y) - lam*Gy(x,y), g(x,y)].map(Math.abs).every(v => v < 1e-5) };
   }
 
   // Dominio/rango estimados por muestreo
@@ -364,11 +455,41 @@
     limOut.textContent = `Estimación por caminos:\n${lines.join('\n')}`;
   }
 
+  function calculateLagrange() {
+    const exprF = fnInput.value.trim();
+    const exprG = (gInput && gInput.value ? gInput.value.trim() : '').trim();
+    if (!exprG) {
+      lagOut && (lagOut.textContent = 'Define la restricción g(x,y)=0.');
+      return;
+    }
+    const x0 = Number(x0Input.value), y0 = Number(y0Input.value);
+    const lam0 = lambda0Input ? Number(lambda0Input.value) : 0;
+    const sol = lagrangeNewton(exprF, exprG, x0, y0, lam0);
+    if (lagOut) {
+      if (sol.success && Number.isFinite(sol.fval)) {
+        lagOut.textContent = `P* ≈ (${sol.x.toFixed(6)}, ${sol.y.toFixed(6)})\nλ ≈ ${sol.lam.toFixed(6)}\nf(P*) ≈ ${sol.fval.toFixed(6)}`;
+      } else {
+        lagOut.textContent = `No convergió o g(x,y) no es válida cerca del punto. Último intento: (${sol.x.toFixed(6)}, ${sol.y.toFixed(6)}), λ≈${sol.lam.toFixed(6)}`;
+      }
+    }
+    // Visualización: añadir contorno de g=0 y marcar el punto óptimo
+    const f = compileFunction(exprF);
+    const g = compileFunction(exprG);
+    const xmin = Number(xMinInput.value), xmax = Number(xMaxInput.value);
+    const ymin = Number(yMinInput.value), ymax = Number(yMaxInput.value);
+    const n = clamp(Number(resInput.value), 10, 200);
+    const gridF = sampleGrid(f, xmin, xmax, ymin, ymax, n);
+    const gridG = sampleGrid(g, xmin, xmax, ymin, ymax, n);
+    const overlays = { constraintZ: gridG.zs, optPoints: [{ x: sol.x, y: sol.y, z: f(sol.x, sol.y) }] };
+    plotCharts(gridF.xs, gridF.ys, gridF.zs, overlays);
+  }
+
   // Eventos
   btnVisualizar.addEventListener('click', visualize);
   btnCalcular.addEventListener('click', calculateAll);
   btnIntegral.addEventListener('click', calculateIntegral);
   btnLimite.addEventListener('click', calculateLimit);
+  if (btnLagrange) btnLagrange.addEventListener('click', calculateLagrange);
 
   // Render inicial
   visualize();
