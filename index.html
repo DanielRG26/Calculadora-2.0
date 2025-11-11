@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Calculadora Multivariable 2.0</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+    <!-- Plotly for 3D/2D charts -->
+    <script src="https://cdn.plot.ly/plotly-2.31.1.min.js"></script>
+    <!-- Math.js for parsing and derivatives -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Calculadora Multivariable 2.0</h1>
+      <p>Visualiza funciones de dos variables, calcula gradientes, límites e integrales dobles.</p>
+    </header>
+
+    <main>
+      <section class="panel inputs">
+        <h2>Función f(x,y)</h2>
+        <label for="fn-input">Ingresa f(x,y):</label>
+        <input id="fn-input" type="text" placeholder="ej. sin(x)*cos(y) + x^2 - y^2" />
+
+        <div class="grid-2">
+          <div>
+            <h3>Dominio (rectangular)</h3>
+            <div class="bounds">
+              <label>x ∈ [<input id="x-min" type="number" step="0.1" value="-5" /> , <input id="x-max" type="number" step="0.1" value="5" />]</label>
+              <label>y ∈ [<input id="y-min" type="number" step="0.1" value="-5" /> , <input id="y-max" type="number" step="0.1" value="5" />]</label>
+              <label>Resolución: <input id="res" type="number" min="10" max="200" value="60" /></label>
+            </div>
+          </div>
+          <div>
+            <h3>Punto de evaluación</h3>
+            <label>(x0, y0) = (<input id="x0" type="number" step="0.1" value="1" />, <input id="y0" type="number" step="0.1" value="1" />)</label>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="btn-visualizar">Visualizar 3D/Contorno</button>
+          <button id="btn-calcular">Calcular Todo</button>
+        </div>
+
+        <h3>Integral doble</h3>
+        <div class="bounds">
+          <label>∫∫ f(x,y) dxdy, x ∈ [<input id="ix-min" type="number" step="0.1" value="-2" /> , <input id="ix-max" type="number" step="0.1" value="2" />]</label>
+          <label>y ∈ [<input id="iy-min" type="number" step="0.1" value="-2" /> , <input id="iy-max" type="number" step="0.1" value="2" />]</label>
+          <label>Subdivisiones: <input id="n-int" type="number" min="10" max="200" value="80" /></label>
+          <button id="btn-integral">Calcular ∫∫</button>
+        </div>
+
+        <h3>Límite en (x0,y0)</h3>
+        <div class="bounds">
+          <label>Épsilon inicial: <input id="eps" type="number" step="0.0001" value="0.01" /></label>
+          <button id="btn-limite">Estimar límite</button>
+        </div>
+      </section>
+
+      <section class="panel charts">
+        <div id="chart3d" class="chart"></div>
+        <div id="chart2d" class="chart"></div>
+      </section>
+
+      <section class="panel results">
+        <h2>Resultados</h2>
+        <div class="result-block">
+          <h3>Evaluación puntual</h3>
+          <pre id="val-out">—</pre>
+        </div>
+        <div class="result-block">
+          <h3>Gradiente (∂f/∂x, ∂f/∂y) en (x0,y0)</h3>
+          <pre id="grad-out">—</pre>
+        </div>
+        <div class="result-block">
+          <h3>Dominio y rango estimados (muestreo)</h3>
+          <pre id="dom-out">—</pre>
+        </div>
+        <div class="result-block">
+          <h3>Límite estimado en (x0,y0)</h3>
+          <pre id="lim-out">—</pre>
+        </div>
+        <div class="result-block">
+          <h3>Integral doble (rectangular)</h3>
+          <pre id="int-out">—</pre>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <small>Usa funciones de Math.js: sin, cos, exp, log, sqrt, etc. Potencia con ^.</small>
+    </footer>
+
+    <script src="assets/app.js"></script>
+  </body>
+</html>

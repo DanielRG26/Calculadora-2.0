@@ -1,0 +1,13 @@
+{
+  "name": "calculadora-multivariable-2.0",
+  "version": "1.0.0",
+  "private": true,
+  "description": "App interactiva para derivadas parciales e integrales múltiples",
+  "scripts": {
+    "dev": "live-server --port=8000 --watch=assets --open=index.html",
+    "start": "npm run dev"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}
